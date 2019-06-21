@@ -1,13 +1,15 @@
-Gpubsub pulls Google Cloud Pub/Sub messages using [Pull](https://cloud.google.com/pubsub/docs/pull) strategy and then performs a command passing message's data and attributes. \
-Subscription **must exist** on Google Cloud side.
+Gpubsub listens for Google Pub/Sub messages and performs tasks based on metadata filters. \
+\
+Gpubsub pulls Google Cloud Pub/Sub messages using [Pull](https://cloud.google.com/pubsub/docs/pull) strategy. \
+It doesn't create subscription, so sub must be created manually on Google Cloud side.
 
 ## How
 
-Next directory structure is required (for instance):
+Let's see on the directory structure (example):
 ```sh
 /opt
   /gpubsub
-    /scripts    # optional, directory with shell scripts (your actions)
+    /scripts    # optional, directory with shell scripts (actions to perform)
     gpubsub     # executable
     subs.yaml   # config describes subscriptions and what scripts to run
     creds.json  # optional, contains Google Cloud credentials to interact with Pub/Sub
@@ -17,16 +19,16 @@ Config example (details below):
 ```yaml
 project: myprojectid-1337              # Your Google Cloud project ID
 subs:                                  # List of subscriptions to listen to
-  - name: my-subscription-name         # Subscription as named in Google Cloud Console and paste name here
-    disable: no                        # Listen this subscription
-    data: none                         # Don't pass messages payload into scripts (see options below)
-    cmd:                               # Do nothing on received message,
+  - name: my-subscription-name         # Subscription as named in Google Cloud Console
+    disable: no                        # Enabled
+    data: none                         # Don't pass message's payload into scripts (see options below)
+    cmd:                               # Do nothing on received message (empty command):
     if:                                #   instead of that check preconditions:
       - metakey: server                # IF message's metadata key named "server"
         equal: ^staging$               # equal to "staging" (RE2 here)
         cmd:                           # THEN do nothing (empty command)
-        then:                          # AND
-          - metakey: app                                       # IF message's metadata with key "app"
+        then:                          # AND IF
+          - metakey: app                                       # message's metadata with key "app"
             equal: ^frontend$                                  # equal to "frontend"
             cmd: [sh, /opt/gpubsub/scripts/update-frontend.sh] # THEN run the script to update my frontend server
           - metakey: app                                       # OR IF message's metadata with key "app"
@@ -61,7 +63,8 @@ Then test it with a real messages: navigate to [Pub/Sub](https://console.cloud.g
 
 ## Pass message to the script
 
-Next strings will be replaced under `cmd` field of the subscription (as well as cmds within IFs): \
+Next strings will be replaced under `cmd` field of the subscription (as well as **cmd**s within **then**s):
+
 | Variable        | Replacement |
 |-----------------|-------------|
 | `GSUB_SUB`      | Subscription name |
@@ -69,7 +72,8 @@ Next strings will be replaced under `cmd` field of the subscription (as well as 
 | `GSUB_META_XXX` | Message's metadata under XXX key (for example: "my key" => "my_key" => "GSUB_META_my_key") |
 | `GSUB_DATA`     | Message's payload (as Base64 or file name, depends on `data` field, see details below) |
 
-Subscription's `data` field defines how message's payload will be passed to the performing script: \
+Subscription's `data` field defines how message's payload will be passed to the performing script:
+
 | Value  | Description |
 |--------|------------ |
 | `var`  | `GSUB_DATA` variable will be replaced with Base64-encoded string of the payload |
@@ -91,8 +95,9 @@ subs:
     data: file                    # pipe
     cmd: [sh, -c, echo GSUB_DATA] # GSUB_DATA replaced with temp filename
   - name: sub4
-    data: none                    # nothing
-    cmd: [sh, -c, echo GSUB_DATA] # GSUB_DATA still GSUB_DATA
+    data: none                                      # nothing
+    cmd: [sh, -c, echo GSUB_DATA GSUB_META_my_key ] # GSUB_DATA still GSUB_DATA, GSUB_META_my_key replaced 
+                                                    #   with a content of the "my key" metadata key
 ```
 
 ## Build
